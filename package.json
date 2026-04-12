@@ -1,6 +1,6 @@
 {
   "name": "mcp-chilegob-dataset",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "MCP server exposing Chile's open government dataset portal (datos.gob.cl / CKAN API v3)",
   "type": "module",
   "license": "MIT",
