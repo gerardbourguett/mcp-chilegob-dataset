@@ -1,44 +1,97 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { getResourceData } from '../ckan.js'
+import { getResourceData, getResource, fetchAndParseFile } from '../ckan.js'
 
 export function registerResourceTool(server: McpServer): void {
   server.registerTool(
     'get_resource_data',
     {
       title: 'Get Resource Data',
-      description: 'Read tabular data from a CKAN resource. Only works for resources with datastore enabled (check datastore_available from get_dataset). Supports pagination via limit and offset.',
+      description:
+        'Read tabular data from a CKAN resource. Tries the CKAN datastore first; if unavailable, automatically downloads and parses the file (CSV, TSV, JSON). For XLS, PDF and other binary formats it returns the direct download URL. Supports pagination via limit and offset.',
       inputSchema: z.object({
-        resource_id: z.string().describe('Resource UUID from a dataset\'s resources list (use get_dataset to obtain it)'),
+        resource_id: z.string().describe("Resource UUID from a dataset's resources list (use get_dataset to obtain it)"),
         limit: z.number().int().min(1).max(500).default(50).optional().describe('Rows to return (default: 50, max: 500)'),
         offset: z.number().int().min(0).default(0).optional().describe('Row offset for pagination (default: 0)'),
       }),
     },
     async ({ resource_id, limit, offset }) => {
+      const effectiveLimit = limit ?? 50
+      const effectiveOffset = offset ?? 0
+
+      // Attempt 1: CKAN datastore
       try {
-        const result = await getResourceData(resource_id, limit ?? 50, offset ?? 0)
+        const result = await getResourceData(resource_id, effectiveLimit, effectiveOffset)
         return {
           content: [{
             type: 'text',
             text: JSON.stringify({
+              source: 'datastore',
               total: result.total,
               returned: result.records.length,
-              offset: offset ?? 0,
+              offset: effectiveOffset,
               fields: result.fields,
               records: result.records,
             }, null, 2),
           }],
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        const isNoDatastore = message.toLowerCase().includes('datastore') || message.includes('404') || message.includes('NOT FOUND')
+      } catch (datastoreError) {
+        const dsMessage = datastoreError instanceof Error ? datastoreError.message : String(datastoreError)
+        const isNoDatastore =
+          dsMessage.toLowerCase().includes('datastore') ||
+          dsMessage.includes('404') ||
+          dsMessage.toUpperCase().includes('NOT FOUND')
+
+        if (!isNoDatastore) {
+          return {
+            content: [{ type: 'text', text: `Error: ${dsMessage}` }],
+            isError: true,
+          }
+        }
+      }
+
+      // Attempt 2: direct file download
+      try {
+        const resource = await getResource(resource_id)
+        const result = await fetchAndParseFile(resource.url, resource.format, effectiveLimit, effectiveOffset)
+
         return {
           content: [{
             type: 'text',
-            text: isNoDatastore
-              ? `Datastore not available for resource "${resource_id}". This resource may be a file (CSV, XLS, PDF) without an activated datastore. Use the resource URL from get_dataset to download it directly.`
-              : `Error: ${message}`,
+            text: JSON.stringify({
+              source: 'file',
+              format: resource.format,
+              url: resource.url,
+              total: result.total,
+              returned: result.records.length,
+              offset: effectiveOffset,
+              fields: result.fields,
+              records: result.records,
+            }, null, 2),
           }],
+        }
+      } catch (fileError) {
+        const fileMessage = fileError instanceof Error ? fileError.message : String(fileError)
+
+        // Format not parseable — return the URL so the AI can guide the user
+        if (fileMessage.startsWith('FORMAT_NOT_PARSEABLE:')) {
+          const [, fmt, url] = fileMessage.split(':')
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                source: 'file',
+                parseable: false,
+                format: fmt,
+                url,
+                message: `This resource is a ${fmt} file and cannot be parsed automatically. Download it directly from the URL above.`,
+              }, null, 2),
+            }],
+          }
+        }
+
+        return {
+          content: [{ type: 'text', text: `Error reading file: ${fileMessage}` }],
           isError: true,
         }
       }

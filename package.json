@@ -1,16 +1,46 @@
 {
-  "name": "mcp",
+  "name": "mcp-chilegob-dataset",
+  "version": "0.1.0",
+  "description": "MCP server exposing Chile's open government dataset portal (datos.gob.cl / CKAN API v3)",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gerardbourguett/mcp-chilegob-dataset.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "chile",
+    "open-data",
+    "datos-gob-cl",
+    "ckan",
+    "hono"
+  ],
+  "bin": {
+    "mcp-chilegob-dataset": "./dist/stdio.js"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "tsc"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
     "@hono/node-server": "^1.19.13",
     "@modelcontextprotocol/hono": "^2.0.0-alpha.2",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/server": "^2.0.0-alpha.2",
     "hono": "^4.12.12",
     "zod": "^4.3.6"
   },

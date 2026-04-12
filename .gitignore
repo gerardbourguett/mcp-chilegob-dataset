@@ -11,8 +11,12 @@
 # deps
 node_modules/
 
+# build
+dist/
+
 # env
 .env
+.env.local
 .env.production
 
 # logs
@@ -26,3 +30,8 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+tmp_*.json
+
+# tooling
+.atl/
+skills-lock.json
