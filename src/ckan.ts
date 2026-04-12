@@ -20,10 +20,21 @@ export interface CkanResource {
   datastore_active: boolean
 }
 
+export interface CkanResourceDetail {
+  id: string
+  name: string
+  format: string
+  url: string
+  datastore_active: boolean
+  mimetype: string | null
+  size: number | null
+}
+
 export interface CkanDatastoreResult {
   fields: { id: string; type: string }[]
   records: Record<string, unknown>[]
   total: number
+  source?: 'datastore' | 'file'
 }
 
 async function ckanAction<T>(action: string, params: Record<string, unknown>): Promise<T> {
@@ -64,4 +75,91 @@ export async function getResourceData(
     limit,
     offset,
   })
+}
+
+export async function getResource(resourceId: string): Promise<CkanResourceDetail> {
+  return ckanAction<CkanResourceDetail>('resource_show', { id: resourceId })
+}
+
+const PARSEABLE_FORMATS = new Set(['CSV', 'TSV', 'JSON'])
+
+export async function fetchAndParseFile(
+  url: string,
+  format: string,
+  limit: number,
+  offset: number
+): Promise<CkanDatastoreResult> {
+  const normalizedFormat = format.toUpperCase().trim()
+
+  if (!PARSEABLE_FORMATS.has(normalizedFormat)) {
+    throw new Error(
+      `FORMAT_NOT_PARSEABLE:${normalizedFormat}:${url}`
+    )
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`)
+  }
+
+  if (normalizedFormat === 'JSON') {
+    const json = await response.json() as unknown
+    const rows: Record<string, unknown>[] = Array.isArray(json)
+      ? (json as Record<string, unknown>[])
+      : [{ data: json }]
+
+    const page = rows.slice(offset, offset + limit)
+    const fields = page.length > 0
+      ? Object.keys(page[0]).map(key => ({ id: key, type: 'text' }))
+      : []
+
+    return { fields, records: page, total: rows.length, source: 'file' }
+  }
+
+  // CSV / TSV
+  const text = await response.text()
+  const separator = normalizedFormat === 'TSV' ? '\t' : ','
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '')
+
+  if (lines.length === 0) {
+    return { fields: [], records: [], total: 0, source: 'file' }
+  }
+
+  const headers = parseDelimitedLine(lines[0], separator)
+  const dataLines = lines.slice(1)
+  const page = dataLines.slice(offset, offset + limit)
+
+  const records = page.map(line => {
+    const values = parseDelimitedLine(line, separator)
+    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? '']))
+  })
+
+  const fields = headers.map(h => ({ id: h, type: 'text' }))
+
+  return { fields, records, total: dataLines.length, source: 'file' }
+}
+
+function parseDelimitedLine(line: string, separator: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === separator && !inQuotes) {
+      result.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  result.push(current)
+  return result
 }
