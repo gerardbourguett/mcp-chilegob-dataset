@@ -23,7 +23,17 @@ El **Model Context Protocol (MCP)** es un estándar abierto que permite a los as
 
 ## Instalación y uso rápido
 
-### Con Claude Desktop (recomendado)
+### Con Claude Code (un comando)
+
+```bash
+claude mcp add chilegob -- npx -y mcp-chilegob-dataset
+```
+
+Eso es todo. El servidor queda registrado globalmente en tu Claude Code. Reinicia la sesión y ya podés usarlo.
+
+---
+
+### Con Claude Desktop
 
 **Paso 1** — Abre la configuración de Claude Desktop.
 
