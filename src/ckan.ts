@@ -164,6 +164,16 @@ export async function getResource(resourceId: string): Promise<CkanResourceDetai
 
 const PARSEABLE_FORMATS = new Set(['CSV', 'TSV', 'JSON'])
 
+function decodeText(buffer: ArrayBuffer, contentType: string): string {
+  const charsetMatch = /charset=([^\s;]+)/i.exec(contentType)
+  const charset = (charsetMatch?.[1] ?? 'utf-8').replace(/^"|"$/g, '')
+  const text = new TextDecoder(charset).decode(buffer)
+  if (text.includes('\uFFFD') && charset.toLowerCase() === 'utf-8') {
+    return new TextDecoder('iso-8859-1').decode(buffer)
+  }
+  return text
+}
+
 export async function fetchAndParseFile(
   url: string,
   format: string,
@@ -208,7 +218,9 @@ export async function fetchAndParseFile(
   }
 
   // CSV / TSV
-  const text = await response.text()
+  const buffer = await response.arrayBuffer()
+  const contentType = response.headers.get('content-type') ?? ''
+  const text = decodeText(buffer, contentType)
   const separator = normalizedFormat === 'TSV' ? '\t' : ','
   const lines = text.split(/\r?\n/).filter(l => l.trim() !== '')
 
