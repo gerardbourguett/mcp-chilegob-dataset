@@ -200,7 +200,7 @@ export async function fetchAndParseFile(
     clearTimeout(timer)
   }
   if (!response.ok) {
-    throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`)
+    throw new CkanHttpError(response.status, response.statusText)
   }
 
   if (normalizedFormat === 'JSON') {
