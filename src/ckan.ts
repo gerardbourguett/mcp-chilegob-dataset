@@ -10,6 +10,26 @@ export class NotParseableError extends Error {
   }
 }
 
+export class CkanHttpError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly statusText: string,
+  ) {
+    super(`CKAN HTTP error: ${statusCode} ${statusText}`)
+    this.name = 'CkanHttpError'
+  }
+}
+
+export class CkanApiError extends Error {
+  constructor(
+    message: string,
+    public readonly errorType: string,
+  ) {
+    super(`CKAN API error: ${message}`)
+    this.name = 'CkanApiError'
+  }
+}
+
 export interface CkanDataset {
   id: string
   name: string
@@ -55,12 +75,14 @@ async function ckanAction<T>(action: string, params: Record<string, unknown>): P
 
   const response = await fetch(url.toString())
   if (!response.ok) {
-    throw new Error(`CKAN API error: ${response.status} ${response.statusText}`)
+    throw new CkanHttpError(response.status, response.statusText)
   }
 
-  const data = await response.json() as { success: boolean; result: T; error?: { message: string } }
+  const data = await response.json() as { success: boolean; result: T; error?: { __type: string; message?: string } }
   if (!data.success) {
-    throw new Error(`CKAN error: ${data.error?.message ?? 'Unknown error'}`)
+    const errorType = data.error?.__type ?? 'Unknown Error'
+    const message = data.error?.message ?? 'Unknown error'
+    throw new CkanApiError(message, errorType)
   }
 
   return data.result

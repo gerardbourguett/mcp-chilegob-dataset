@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { getResourceData, getResource, fetchAndParseFile, NotParseableError } from '../ckan.js'
+import { getResourceData, getResource, fetchAndParseFile, NotParseableError, CkanHttpError, CkanApiError } from '../ckan.js'
 
 export function registerResourceTool(server: McpServer): void {
   server.registerTool(
@@ -36,13 +36,12 @@ export function registerResourceTool(server: McpServer): void {
           }],
         }
       } catch (datastoreError) {
-        const dsMessage = datastoreError instanceof Error ? datastoreError.message : String(datastoreError)
         const isNoDatastore =
-          dsMessage.toLowerCase().includes('datastore') ||
-          dsMessage.includes('404') ||
-          dsMessage.toUpperCase().includes('NOT FOUND')
+          (datastoreError instanceof CkanHttpError && datastoreError.statusCode === 404) ||
+          (datastoreError instanceof CkanApiError && datastoreError.errorType.toLowerCase().includes('not found'))
 
         if (!isNoDatastore) {
+          const dsMessage = datastoreError instanceof Error ? datastoreError.message : String(datastoreError)
           return {
             content: [{ type: 'text', text: `Error: ${dsMessage}` }],
             isError: true,
