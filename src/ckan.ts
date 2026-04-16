@@ -1,4 +1,54 @@
 const CKAN_BASE = 'https://datos.gob.cl/api/3/action'
+const FETCH_TIMEOUT_MS = 10_000
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+class TTLCache<V> {
+  private readonly store = new Map<string, { value: V; expiresAt: number }>()
+
+  get(key: string): V | undefined {
+    const entry = this.store.get(key)
+    if (entry === undefined) return undefined
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key)
+      return undefined
+    }
+    return entry.value
+  }
+
+  set(key: string, value: V, ttlMs: number): void {
+    this.store.set(key, { value, expiresAt: Date.now() + ttlMs })
+  }
+}
+
+export class NotParseableError extends Error {
+  constructor(
+    public readonly format: string,
+    public readonly url: string,
+  ) {
+    super(`Format not parseable: ${format} (${url})`)
+    this.name = 'NotParseableError'
+  }
+}
+
+export class CkanHttpError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly statusText: string,
+  ) {
+    super(`CKAN HTTP error: ${statusCode} ${statusText}`)
+    this.name = 'CkanHttpError'
+  }
+}
+
+export class CkanApiError extends Error {
+  constructor(
+    message: string,
+    public readonly errorType: string,
+  ) {
+    super(`CKAN API error: ${message}`)
+    this.name = 'CkanApiError'
+  }
+}
 
 export interface CkanDataset {
   id: string
@@ -43,26 +93,51 @@ async function ckanAction<T>(action: string, params: Record<string, unknown>): P
     url.searchParams.set(key, String(value))
   }
 
-  const response = await fetch(url.toString())
-  if (!response.ok) {
-    throw new Error(`CKAN API error: ${response.status} ${response.statusText}`)
-  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const response = await fetch(url.toString(), { signal: controller.signal })
+    if (!response.ok) {
+      throw new CkanHttpError(response.status, response.statusText)
+    }
 
-  const data = await response.json() as { success: boolean; result: T; error?: { message: string } }
-  if (!data.success) {
-    throw new Error(`CKAN error: ${data.error?.message ?? 'Unknown error'}`)
-  }
+    const data = await response.json() as { success: boolean; result: T; error?: { __type: string; message?: string } }
+    if (!data.success) {
+      const errorType = data.error?.__type ?? 'Unknown Error'
+      const message = data.error?.message ?? 'Unknown error'
+      throw new CkanApiError(message, errorType)
+    }
 
-  return data.result
+    return data.result
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS / 1000}s`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
+const searchCache = new TTLCache<CkanDataset[]>()
+const datasetCache = new TTLCache<CkanDataset>()
+
 export async function searchDatasets(query: string, limit: number = 10): Promise<CkanDataset[]> {
+  const key = `search:${query}:${limit}`
+  const cached = searchCache.get(key)
+  if (cached !== undefined) return cached
   const result = await ckanAction<{ results: CkanDataset[] }>('package_search', { q: query, rows: limit })
+  searchCache.set(key, result.results, CACHE_TTL_MS)
   return result.results
 }
 
 export async function getDataset(id: string): Promise<CkanDataset> {
-  return ckanAction<CkanDataset>('package_show', { id })
+  const key = `dataset:${id}`
+  const cached = datasetCache.get(key)
+  if (cached !== undefined) return cached
+  const dataset = await ckanAction<CkanDataset>('package_show', { id })
+  datasetCache.set(key, dataset, CACHE_TTL_MS)
+  return dataset
 }
 
 export async function getResourceData(
@@ -92,12 +167,22 @@ export async function fetchAndParseFile(
   const normalizedFormat = format.toUpperCase().trim()
 
   if (!PARSEABLE_FORMATS.has(normalizedFormat)) {
-    throw new Error(
-      `FORMAT_NOT_PARSEABLE:${normalizedFormat}:${url}`
-    )
+    throw new NotParseableError(normalizedFormat, url)
   }
 
-  const response = await fetch(url)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(url, { signal: controller.signal })
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS / 1000}s`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!response.ok) {
     throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`)
   }

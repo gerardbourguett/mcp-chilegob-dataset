@@ -1,5 +1,10 @@
 # mcp-chilegob-dataset
 
+[![npm version](https://img.shields.io/npm/v/mcp-chilegob-dataset.svg)](https://www.npmjs.com/package/mcp-chilegob-dataset)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
+> **English summary:** MCP server that exposes Chile's open government data portal ([datos.gob.cl](https://datos.gob.cl)) as tools for AI assistants. Search and read thousands of public datasets from Chilean government institutions — health, education, transport, environment, and more. No API key required.
+
 Servidor MCP que expone el portal de datos abiertos del gobierno de Chile — [datos.gob.cl](https://datos.gob.cl) — como herramientas para asistentes de inteligencia artificial.
 
 Construido con [Hono](https://hono.dev) y el [SDK de TypeScript del Model Context Protocol](https://github.com/modelcontextprotocol/typescript-sdk).
@@ -180,7 +185,7 @@ Lee filas tabulares de un recurso CKAN. Intenta primero el datastore y, si no es
   "parseable": false,
   "format": "XLS",
   "url": "https://datosabiertos.mineduc.cl/archivo.xls",
-  "message": "This resource is a XLS file and cannot be parsed automatically. Download it directly from the URL above."
+  "message": "This resource is a XLS file and cannot be parsed automatically. Download it directly from the URL provided."
 }
 ```
 
@@ -279,7 +284,8 @@ export function registerTuHerramienta(server: McpServer): void {
 - **Disponibilidad del datastore** — No todos los recursos tienen datastore habilitado en CKAN. `get_resource_data` intenta automáticamente descargar el archivo (CSV, TSV, JSON); los formatos binarios (XLS, PDF) requieren descarga manual desde la URL devuelta.
 - **Archivos grandes** — La descarga directa carga el archivo completo en memoria antes de paginar. Para archivos muy grandes (>100 MB) esto puede ser lento o fallar.
 - **Encoding** — Los archivos CSV de datos.gob.cl pueden estar en ISO-8859-1 (Latin-1). La herramienta intenta leerlos como UTF-8; si los caracteres aparecen corruptos, descarga el archivo directamente.
-- **Sin caché** — Cada llamada hace una solicitud en vivo a datos.gob.cl. No hay límites de tasa documentados.
+- **Caché en memoria (5 min)** — `search_datasets` y `get_dataset` usan caché en memoria con TTL de 5 minutos. `get_resource_data` siempre consulta en vivo. No hay límites de tasa documentados en datos.gob.cl.
+- **Timeout de red (10s)** — Todas las solicitudes a datos.gob.cl tienen un timeout de 10 segundos. Si el portal está lento o caído, las herramientas devuelven un error claro en lugar de colgar indefinidamente.
 - **Paquetes en alpha** — `@modelcontextprotocol/hono` y `@modelcontextprotocol/server` están en versión alpha.
 
 ---
@@ -290,7 +296,6 @@ Las contribuciones son bienvenidas. Algunas ideas:
 
 - [ ] Herramienta `list_organizations` — listar instituciones disponibles
 - [ ] Herramienta `get_resource_schema` — tipos y descripciones de columnas
-- [ ] Caché en memoria para reducir llamadas a la API
 - [ ] MCP Resources con URI templates (`datos-gob-cl://dataset/{id}`)
 
 Por favor, abre un issue antes de enviar un PR grande.
