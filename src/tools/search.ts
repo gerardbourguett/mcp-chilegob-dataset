@@ -16,7 +16,7 @@ export function registerSearchTool(server: McpServer): void {
     async ({ query, limit }) => {
       try {
         const datasets = await searchDatasets(query, limit ?? 10)
-        const formatted = datasets.map(d => ({
+        const formatted = datasets.results.map(d => ({
           id: d.name,
           title: d.title,
           description: d.notes?.slice(0, 200) ?? '',
@@ -24,7 +24,7 @@ export function registerSearchTool(server: McpServer): void {
           resource_count: d.num_resources,
         }))
         return {
-          content: [{ type: 'text', text: JSON.stringify(formatted, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ total: datasets.total, returned: formatted.length, results: formatted }, null, 2) }],
         }
       } catch (error) {
         return {

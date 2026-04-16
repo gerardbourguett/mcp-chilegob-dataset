@@ -119,16 +119,22 @@ async function ckanAction<T>(action: string, params: Record<string, unknown>): P
   }
 }
 
-const searchCache = new TTLCache<CkanDataset[]>()
+export interface CkanSearchResult {
+  total: number
+  results: CkanDataset[]
+}
+
+const searchCache = new TTLCache<CkanSearchResult>()
 const datasetCache = new TTLCache<CkanDataset>()
 
-export async function searchDatasets(query: string, limit: number = 10): Promise<CkanDataset[]> {
+export async function searchDatasets(query: string, limit: number = 10): Promise<CkanSearchResult> {
   const key = `search:${query}:${limit}`
   const cached = searchCache.get(key)
   if (cached !== undefined) return cached
-  const result = await ckanAction<{ results: CkanDataset[] }>('package_search', { q: query, rows: limit })
-  searchCache.set(key, result.results, CACHE_TTL_MS)
-  return result.results
+  const result = await ckanAction<{ count: number; results: CkanDataset[] }>('package_search', { q: query, rows: limit })
+  const value: CkanSearchResult = { total: result.count, results: result.results }
+  searchCache.set(key, value, CACHE_TTL_MS)
+  return value
 }
 
 export async function getDataset(id: string): Promise<CkanDataset> {
