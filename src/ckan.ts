@@ -1,5 +1,24 @@
 const CKAN_BASE = 'https://datos.gob.cl/api/3/action'
 const FETCH_TIMEOUT_MS = 10_000
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+class TTLCache<V> {
+  private readonly store = new Map<string, { value: V; expiresAt: number }>()
+
+  get(key: string): V | undefined {
+    const entry = this.store.get(key)
+    if (entry === undefined) return undefined
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key)
+      return undefined
+    }
+    return entry.value
+  }
+
+  set(key: string, value: V, ttlMs: number): void {
+    this.store.set(key, { value, expiresAt: Date.now() + ttlMs })
+  }
+}
 
 export class NotParseableError extends Error {
   constructor(
@@ -100,13 +119,25 @@ async function ckanAction<T>(action: string, params: Record<string, unknown>): P
   }
 }
 
+const searchCache = new TTLCache<CkanDataset[]>()
+const datasetCache = new TTLCache<CkanDataset>()
+
 export async function searchDatasets(query: string, limit: number = 10): Promise<CkanDataset[]> {
+  const key = `search:${query}:${limit}`
+  const cached = searchCache.get(key)
+  if (cached !== undefined) return cached
   const result = await ckanAction<{ results: CkanDataset[] }>('package_search', { q: query, rows: limit })
+  searchCache.set(key, result.results, CACHE_TTL_MS)
   return result.results
 }
 
 export async function getDataset(id: string): Promise<CkanDataset> {
-  return ckanAction<CkanDataset>('package_show', { id })
+  const key = `dataset:${id}`
+  const cached = datasetCache.get(key)
+  if (cached !== undefined) return cached
+  const dataset = await ckanAction<CkanDataset>('package_show', { id })
+  datasetCache.set(key, dataset, CACHE_TTL_MS)
+  return dataset
 }
 
 export async function getResourceData(
