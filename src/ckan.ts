@@ -1,5 +1,15 @@
 const CKAN_BASE = 'https://datos.gob.cl/api/3/action'
 
+export class NotParseableError extends Error {
+  constructor(
+    public readonly format: string,
+    public readonly url: string,
+  ) {
+    super(`Format not parseable: ${format} (${url})`)
+    this.name = 'NotParseableError'
+  }
+}
+
 export interface CkanDataset {
   id: string
   name: string
@@ -92,9 +102,7 @@ export async function fetchAndParseFile(
   const normalizedFormat = format.toUpperCase().trim()
 
   if (!PARSEABLE_FORMATS.has(normalizedFormat)) {
-    throw new Error(
-      `FORMAT_NOT_PARSEABLE:${normalizedFormat}:${url}`
-    )
+    throw new NotParseableError(normalizedFormat, url)
   }
 
   const response = await fetch(url)
