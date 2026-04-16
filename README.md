@@ -29,7 +29,7 @@ El **Model Context Protocol (MCP)** es un estándar abierto que permite a los as
 claude mcp add chilegob -- npx -y mcp-chilegob-dataset
 ```
 
-Eso es todo. El servidor queda registrado globalmente en tu Claude Code. Reinicia la sesión y ya podés usarlo.
+Eso es todo. El servidor queda registrado globalmente en tu Claude Code. Reinicia la sesión y ya puedes usarlo.
 
 ---
 
