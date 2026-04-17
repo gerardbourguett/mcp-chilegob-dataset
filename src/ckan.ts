@@ -119,6 +119,13 @@ async function ckanAction<T>(action: string, params: Record<string, unknown>): P
   }
 }
 
+export interface CkanOrganization {
+  name: string
+  title: string
+  description: string | null
+  package_count: number
+}
+
 export interface CkanSearchResult {
   total: number
   results: CkanDataset[]
@@ -160,6 +167,10 @@ export async function getResourceData(
 
 export async function getResource(resourceId: string): Promise<CkanResourceDetail> {
   return ckanAction<CkanResourceDetail>('resource_show', { id: resourceId })
+}
+
+export async function listOrganizations(): Promise<CkanOrganization[]> {
+  return ckanAction<CkanOrganization[]>('organization_list', { all_fields: true })
 }
 
 const PARSEABLE_FORMATS = new Set(['CSV', 'TSV', 'JSON'])
