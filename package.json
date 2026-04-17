@@ -37,9 +37,6 @@
     "prepublishOnly": "tsc",
     "test": "vitest run"
   },
-  "vitest": {
-    "environment": "node"
-  },
   "dependencies": {
     "@hono/node-server": "^1.19.13",
     "@modelcontextprotocol/hono": "^2.0.0-alpha.2",

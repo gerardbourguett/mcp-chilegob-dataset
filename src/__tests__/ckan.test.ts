@@ -77,11 +77,46 @@ describe('fetchAndParseFile', () => {
     expect(result.total).toBe(4)
   })
 
-  it('throws CkanHttpError on non-ok response', async () => {
+  it('parses TSV and splits on tab', async () => {
+    const tsv = 'A\tB\n1\t2\n3\t4\n'
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(tsv, { status: 200, headers: { 'content-type': 'text/tab-separated-values' } })
+    )
+    const result = await fetchAndParseFile('https://x.com/data.tsv', 'TSV', 10, 0)
+    expect(result.records[0]).toEqual({ A: '1', B: '2' })
+    expect(result.total).toBe(2)
+    expect(result.source).toBe('file')
+  })
+
+  it('parses JSON array and returns records', async () => {
+    const json = JSON.stringify([{ name: 'Chile', code: 'CL' }, { name: 'Peru', code: 'PE' }])
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(json, { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const result = await fetchAndParseFile('https://x.com/data.json', 'JSON', 10, 0)
+    expect(result.total).toBe(2)
+    expect(result.records[0]).toEqual({ name: 'Chile', code: 'CL' })
+    expect(result.fields).toEqual([{ id: 'name', type: 'text' }, { id: 'code', type: 'text' }])
+    expect(result.source).toBe('file')
+  })
+
+  it('returns empty result for empty CSV body', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response('\n\n  \n', { status: 200, headers: { 'content-type': 'text/csv' } })
+    )
+    const result = await fetchAndParseFile('https://x.com/empty.csv', 'CSV', 10, 0)
+    expect(result.fields).toEqual([])
+    expect(result.records).toEqual([])
+    expect(result.total).toBe(0)
+  })
+
+  it('throws CkanHttpError with correct status on non-ok response', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(
       new Response('Not Found', { status: 404, statusText: 'Not Found' })
     )
-    await expect(fetchAndParseFile('https://x.com/data.csv', 'CSV', 10, 0))
-      .rejects.toBeInstanceOf(CkanHttpError)
+    const err = await fetchAndParseFile('https://x.com/data.csv', 'CSV', 10, 0).catch(e => e)
+    expect(err).toBeInstanceOf(CkanHttpError)
+    expect(err.statusCode).toBe(404)
+    expect(err.statusText).toBe('Not Found')
   })
 })
