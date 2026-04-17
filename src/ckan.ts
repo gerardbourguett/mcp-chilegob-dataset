@@ -173,6 +173,31 @@ export async function listOrganizations(): Promise<CkanOrganization[]> {
   return ckanAction<CkanOrganization[]>('organization_list', { all_fields: true })
 }
 
+export interface CkanFieldSchema {
+  id: string
+  type: string
+  label: string | null
+  description: string | null
+}
+
+interface RawField {
+  id: string
+  type: string
+  info?: { label?: string; notes?: string }
+}
+
+export async function getResourceSchema(resourceId: string): Promise<CkanFieldSchema[]> {
+  const result = await ckanAction<{ id: string; fields: RawField[] }>('datastore_info', { id: resourceId })
+  return result.fields
+    .filter(field => field.id !== '_id')
+    .map(field => ({
+      id: field.id,
+      type: field.type,
+      label: field.info?.label ?? null,
+      description: field.info?.notes ?? null,
+    }))
+}
+
 const PARSEABLE_FORMATS = new Set(['CSV', 'TSV', 'JSON'])
 
 function decodeText(buffer: ArrayBuffer, contentType: string): string {
