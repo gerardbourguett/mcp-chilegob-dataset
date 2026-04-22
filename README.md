@@ -40,7 +40,9 @@ Eso es todo. El servidor queda registrado globalmente en tu Claude Code. Reinici
 En Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
 En Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
-**Paso 2** — Agrega estas líneas:
+**Paso 2** — Agrega la configuración según tu sistema operativo:
+
+**Mac / Linux:**
 
 ```json
 {
@@ -53,7 +55,30 @@ En Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 }
 ```
 
-**Paso 3** — Reinicia Claude Desktop. La primera vez descarga el paquete automáticamente.
+**Windows:**
+
+Primero instala el paquete globalmente:
+
+```bash
+npm install -g mcp-chilegob-dataset
+```
+
+Luego agrega la configuración reemplazando `TU_USUARIO` con tu nombre de usuario de Windows:
+
+```json
+{
+  "mcpServers": {
+    "chilegob": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\TU_USUARIO\\AppData\\Roaming\\npm\\node_modules\\mcp-chilegob-dataset\\dist\\stdio.js"
+      ]
+    }
+  }
+}
+```
+
+**Paso 3** — Reinicia Claude Desktop.
 
 Eso es todo. Puedes pedirle a Claude cosas como:
 
