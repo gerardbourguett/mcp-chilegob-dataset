@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { getResourceData, getResource, fetchAndParseFile } from '../ckan.js'
+import { getResourceData, getResource, fetchAndParseFile, NotParseableError, CkanHttpError, CkanApiError } from '../ckan.js'
 
 export function registerResourceTool(server: McpServer): void {
   server.registerTool(
@@ -36,13 +36,12 @@ export function registerResourceTool(server: McpServer): void {
           }],
         }
       } catch (datastoreError) {
-        const dsMessage = datastoreError instanceof Error ? datastoreError.message : String(datastoreError)
         const isNoDatastore =
-          dsMessage.toLowerCase().includes('datastore') ||
-          dsMessage.includes('404') ||
-          dsMessage.toUpperCase().includes('NOT FOUND')
+          (datastoreError instanceof CkanHttpError && datastoreError.statusCode === 404) ||
+          (datastoreError instanceof CkanApiError && datastoreError.errorType.toLowerCase().includes('not found'))
 
         if (!isNoDatastore) {
+          const dsMessage = datastoreError instanceof Error ? datastoreError.message : String(datastoreError)
           return {
             content: [{ type: 'text', text: `Error: ${dsMessage}` }],
             isError: true,
@@ -71,24 +70,23 @@ export function registerResourceTool(server: McpServer): void {
           }],
         }
       } catch (fileError) {
-        const fileMessage = fileError instanceof Error ? fileError.message : String(fileError)
-
         // Format not parseable — return the URL so the AI can guide the user
-        if (fileMessage.startsWith('FORMAT_NOT_PARSEABLE:')) {
-          const [, fmt, url] = fileMessage.split(':')
+        if (fileError instanceof NotParseableError) {
           return {
             content: [{
               type: 'text',
               text: JSON.stringify({
                 source: 'file',
                 parseable: false,
-                format: fmt,
-                url,
-                message: `This resource is a ${fmt} file and cannot be parsed automatically. Download it directly from the URL above.`,
+                format: fileError.format,
+                url: fileError.url,
+                message: `This resource is a ${fileError.format} file and cannot be parsed automatically. Download it directly from the URL above.`,
               }, null, 2),
             }],
           }
         }
+
+        const fileMessage = fileError instanceof Error ? fileError.message : String(fileError)
 
         return {
           content: [{ type: 'text', text: `Error reading file: ${fileMessage}` }],
